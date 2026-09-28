@@ -110,4 +110,16 @@ YApi 在浏览器里发请求靠 cross-request 扩展，它**会删掉写在头�
 
 ## 更新
 
-以后这个仓库有改动，重跑「安装 1」的四条 `cp`，然后 `node .claude/skills/yapi/scripts/yapi.mjs init`。`project.md` 不会被覆盖（它不在拷贝范围里，见第 1 步的路径）——注意 `cp -R .../skills/yapi` 会连 `references/project.md` 一起覆盖，更新时改成只拷 `SKILL.md`、`scripts/`、`openspec-schema/`、`references/example-api.md`。
+这个仓库有改动时，在业务仓库根目录重跑（`project.md` 不在这几条里，不会被覆盖）：
+
+```bash
+git clone --depth 1 git@github.com:ha1ha2hahaha/openspec-yolo.git /tmp/openspec-yolo
+cp -R /tmp/openspec-yolo/.claude/commands/opsx      .claude/commands/opsx
+cp -R /tmp/openspec-yolo/.claude/skills/openspec-*  .claude/skills/
+cp    /tmp/openspec-yolo/.claude/skills/yapi/SKILL.md                     .claude/skills/yapi/SKILL.md
+cp -R /tmp/openspec-yolo/.claude/skills/yapi/scripts                      .claude/skills/yapi/
+cp -R /tmp/openspec-yolo/.claude/skills/yapi/openspec-schema              .claude/skills/yapi/
+cp    /tmp/openspec-yolo/.claude/skills/yapi/references/example-api.md    .claude/skills/yapi/references/
+rm -rf /tmp/openspec-yolo
+node .claude/skills/yapi/scripts/yapi.mjs init
+```

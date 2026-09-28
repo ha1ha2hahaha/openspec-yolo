@@ -22,10 +22,28 @@ AI Native 协作流程的 skill 包，装进任何一个后端仓库就能用：
         ├── openspec-schema/      OpenSpec 产物清单（比默认多一个 api）+ 模板
         └── references/
             ├── example-api.md    脚本校验通过的 api.md 范例（虚构业务）
-            └── project.md        项目事实，每个仓库自己填 ← 唯一要改的文件
+            └── project.md        项目事实，AI 第一次用时自己补，人不用填
 ```
 
-## 安装（一个仓库一次，约 10 分钟）
+## 一键安装
+
+在业务仓库根目录跑一句（要先有 Node 和 npm）：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ha1ha2hahaha/openspec-yolo/main/install.sh)
+```
+
+它会：没装 OpenSpec 就装、没有 `openspec/` 就 `openspec init`、把 skill 包拷进 `.claude/`、装 yapi CLI、把 api 产物接进 OpenSpec、自检，最后问你 YApi 地址、邮箱、密码登录一次（密码不落盘）。跑完就能用。重复跑等于更新。
+
+**不用人填任何配置。** 项目事实（统一返回格式、成功码、test 域名、YApi 项目 id、测试数据）由 AI 第一次跑 `/opsx:propose` 时自己读代码补进 `.claude/skills/yapi/references/project.md`，代码里读不到的（项目 id、测试数据）它会问你一次，之后不再问。
+
+交给 AI 装也行，把这句发给 Claude Code：
+
+> 在仓库根目录跑 `bash <(curl -fsSL https://raw.githubusercontent.com/ha1ha2hahaha/openspec-yolo/main/install.sh)`，登录那步问我要。
+
+下面是手工安装的等价步骤，想知道脚本做了什么再看。
+
+## 手工安装（和一键安装等价）
 
 下面的命令都在**你的业务仓库根目录**执行。`<...>` 是要替换的值。
 
@@ -50,9 +68,9 @@ rm -rf /tmp/openspec-yolo
 
 `.claude/` 已有别的 skill 的话不受影响，只会覆盖 `commands/opsx/` 和 `skills/openspec-*`、`skills/yapi/` 这几个目录。
 
-### 2. 填项目事实
+### 2. 项目事实不用填
 
-打开 `.claude/skills/yapi/references/project.md`，把表格里的占位符换成你项目的值：统一返回格式、成功码、公共请求头、test 域名、YApi 地址、YApi 项目 id（项目页网址 `/project/<数字>/` 里的数字）、测试数据表。**只写事实，不写 token、密码、cookie 值。**
+`.claude/skills/yapi/references/project.md` 是 AI 维护的：里面的「待填」由 AI 第一次写 api.md 之前去代码里找（返回格式、成功码、公共头、test 域名），找不到的问你一次（YApi 项目 id、测试数据），补完写回文件。你只需要保证这个文件进 git。
 
 ### 3. 装 yapi CLI 并登录（一台电脑一次）
 
@@ -110,16 +128,5 @@ YApi 在浏览器里发请求靠 cross-request 扩展，它**会删掉写在头�
 
 ## 更新
 
-这个仓库有改动时，在业务仓库根目录重跑（`project.md` 不在这几条里，不会被覆盖）：
+在业务仓库根目录再跑一次一键安装那句就是更新，`project.md` 不会被覆盖。
 
-```bash
-git clone --depth 1 git@github.com:ha1ha2hahaha/openspec-yolo.git /tmp/openspec-yolo
-cp -R /tmp/openspec-yolo/.claude/commands/opsx      .claude/commands/opsx
-cp -R /tmp/openspec-yolo/.claude/skills/openspec-*  .claude/skills/
-cp    /tmp/openspec-yolo/.claude/skills/yapi/SKILL.md                     .claude/skills/yapi/SKILL.md
-cp -R /tmp/openspec-yolo/.claude/skills/yapi/scripts                      .claude/skills/yapi/
-cp -R /tmp/openspec-yolo/.claude/skills/yapi/openspec-schema              .claude/skills/yapi/
-cp    /tmp/openspec-yolo/.claude/skills/yapi/references/example-api.md    .claude/skills/yapi/references/
-rm -rf /tmp/openspec-yolo
-node .claude/skills/yapi/scripts/yapi.mjs init
-```

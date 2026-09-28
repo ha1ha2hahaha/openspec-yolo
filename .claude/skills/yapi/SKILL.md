@@ -20,7 +20,20 @@ openspec/changes/<变更>/
 
 ## 搬到别的仓库
 
-本 skill 和 `openspec-explore` / `openspec-propose` / `openspec-apply-change` / `openspec-archive-change` 一起，整个 `.claude/skills/` 拷过去就能用（三个 openspec skill 开头各挂了一行指到这里）。只有一个文件是本仓库专有的：`references/project.md`（统一返回格式、成功码、公共请求头、test 域名、测试数据表），换仓库重写它。写 api.md 前先读它；里面没有的事实问用户，不猜。
+本 skill 和 `openspec-explore` / `openspec-propose` / `openspec-apply-change` / `openspec-archive-change` 一起，整个 `.claude/skills/` 拷过去就能用（三个 openspec skill 开头各挂了一行指到这里）。仓库根目录一句 `curl -fsSL https://raw.githubusercontent.com/ha1ha2hahaha/openspec-yolo/main/install.sh | bash` 就装完，不用人填任何配置。
+
+**项目事实由 AI 维护，不让人填。** `references/project.md` 记本仓库的事实：统一返回格式、成功码、错误时 data 形状、登录态和公共请求头、test 域名、YApi 项目 id、测试数据表。第一次写 api.md 之前检查它：文件不存在或有「待填」，就自己去补，补完写进去，下次直接读：
+
+| 事实 | 去哪找 |
+|---|---|
+| 统一返回格式、成功码、错误时 data 形状 | 控制器基类的 JSON 输出方法（PHP 常叫 writeJson / response，Go 常叫 Success / Fail），读代码，不猜 |
+| 登录态、签名、公共请求头 | 基类的 onRequest / 中间件里读 cookie 和 header 的地方 |
+| test 域名 | README、CLAUDE.md、部署配置、Apifox / Postman 导出；都没有就问一次 |
+| YApi 地址 | `~/.yapi/config.toml` 的 base_url，脚本自己读，不用写 |
+| YApi 项目 id | 问一次：「推到 YApi 哪个项目？项目页网址 /project/<数字>/」 |
+| 测试数据（真实 id） | 问一次，或从已有单测、Apifox 用例里取；每条标来源和日期 |
+
+只有 YApi 项目 id 和测试数据是人才知道的，一次问清写进文件；其它的从代码里读。
 
 ## 第一次在一个仓库里用：自检，不问人
 
@@ -108,6 +121,6 @@ POST 接口：请求参数表照写，脚本转成 JSON 请求体示例推上去
 
 - 不把 token、密码、cookie 写进任何文件；不替用户跑 `yapi login`
 - 不在 propose 阶段推 YApi
-- 不猜示例值、不猜 project.md 里没有的事实
+- 不猜示例值、不猜项目事实：代码里读得到的读代码，读不到的问一次，写进 project.md
 - 不在 YApi 上手改脚本建的接口定义、集合、用例（下次 push 会覆盖）；改 api.md
 - 不在人跑绿之前 archive

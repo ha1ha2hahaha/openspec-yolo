@@ -57,7 +57,7 @@ openspec schemas --json 2>/dev/null | grep -q '"api-contract"' && ok "OpenSpec �
 # 6. YApi 登录（一台电脑一次）。有终端就当场问；curl | bash 没有终端，就打印两条命令
 if yapi whoami --no-update 2>/dev/null | grep -q '"errcode": 0'; then
   ok "yapi CLI 已登录"
-elif [ -t 0 ] || [ -e /dev/tty ]; then
+elif (: </dev/tty) 2>/dev/null; then   # 有可读的终端才当场问；curl | bash 且没终端时走下面的提示
   echo
   echo "登录 YApi（密码只用来换 cookie，不落盘；7 天后重跑 yapi login）"
   read -r -p "  YApi 地址（如 http://yapi.example.com）: " YAPI_URL </dev/tty

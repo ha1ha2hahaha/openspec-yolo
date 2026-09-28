@@ -88,7 +88,7 @@ export function parseApiMd(text, file = 'api.md') {
     if (/^(\*\*)?模块(\*\*)?[:：]/.test(t)) {
       const mm = t.match(/模块(?:\*\*)?[:：]\s*([^\s　]+)/);
       const mod = mm ? clean(mm[1]) : '';
-      if (!MODULE_RE.test(mod)) fail(`${file}:${l.no}：模块名「${mod}」必须是英文小写和连字符，如 snapshot-report，且要和 openspec/specs/ 下的能力目录同名`);
+      if (!MODULE_RE.test(mod)) fail(`${file}:${l.no}：模块名「${mod}」必须是英文小写和连字符，如 order-detail，且要和 openspec/specs/ 下的能力目录同名`);
       cur.module = mod;
       cur.login = (t.match(/登录[:：]\s*([^\s　]+)/) || [])[1] || '';
       cur.sign = (t.match(/签名[:：]\s*([^\s　]+)/) || [])[1] || '';

@@ -53,8 +53,8 @@ node .claude/skills/yapi/scripts/yapi.mjs init
 实测通过的完整范例 `references/example-api.md`，**照它逐字写，不要发挥。** 一个接口一段，五张表：
 
 ```markdown
-## GET /api/snapshot/report 免费快照报告
-模块：snapshot-report　　登录：否　　签名：否
+## GET /api/order/detail 订单详情
+模块：order-detail　　登录：否　　签名：否
 
 ### 请求头
 | 参数 | 必填 | 示例 | 说明 |

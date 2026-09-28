@@ -1,56 +1,51 @@
-# 接口契约（范例：免费快照报告，2026-09-28 在 YApi 项目 1070 实测通过）
+# 接口契约（范例，脚本校验通过；业务是虚构的，只看格式）
 
-## GET /api/snapshot/report 免费快照报告
-模块：snapshot-report　　登录：否　　签名：否
+## GET /api/order/detail 订单详情
+模块：order-detail　　登录：否　　签名：否
 
 ### 请求头
 | 参数 | 必填 | 示例 | 说明 |
 |---|---|---|---|
-| Cookie | 是 | fp_visid=@guid | 按 visid 计次，每天 3 次；YApi 每次生成新值 |
+| Cookie | 是 | visitor_id=@guid | 按访客计次，每天 3 次；YApi 每次生成新值，不撞限额 |
 
 ### 请求参数
 | 参数 | 类型 | 必填 | 示例 | 说明 |
 |---|---|---|---|---|
-| kind | string | 是 | product | product / shop / creator |
-| id | string | 是 | 1730826344204964304 | 数字字符串，最长 25 位；示例是 test 库真实商品 |
-| ids | string | 否 | | 逗号分隔，最多 10 个 |
-| sid | string | 否 | | 16 位十六进制 |
+| order_no | string | 是 | DEMO202609280001 | 订单号，示例必须是 test 库里真实存在的值 |
+| with_items | boolean | 否 | true | 是否带明细 |
+| sid | string | 否 | | 上次返回的会话 id，同一会话内切换不扣次数 |
 
 ### 返回字段
 | 字段 | 类型 | 必有 | 说明 |
 |---|---|---|---|
 | code | integer | 是 | 成功 200 |
 | msg | string | 是 | |
-| data.sid | string? | 是 | 没命中时为 null |
-| data.quota.used | integer | 是 | |
-| data.quota.limit | integer | 是 | |
-| data.quota.reset_at | string | 是 | 形如 2026-09-28T00:00:00-07:00 |
-| data.report | object? | 是 | 13 个固定键；没命中时为 null |
-| data.report.kind | string | 是 | product / shop / creator |
-| data.report.range | object | 是 | days / start / end |
-| data.report.base | object | 是 | |
-| data.report.summary | object | 是 | gmv / units / creators / avg_price / followers |
-| data.report.chart | array | 是 | 28 天趋势 |
-| data.report.chart.date | string | 是 | |
-| data.report.chart.gmv | number | 是 | |
-| data.report.metrics | object | 是 | |
-| data.report.channels | array | 是 | |
-| data.report.formats | object? | 是 | 商品类型为 null |
-| data.report.top_products | object? | 是 | 商品类型为 null |
-| data.report.top_creators | object | 是 | total / list |
-| data.report.top_videos | object | 是 | total / list |
-| data.report.top_categories | object? | 是 | 商品类型为 null |
-| data.report.fans | object? | 是 | 商品类型为 null |
+| data.sid | string? | 是 | 会话 id，请求没带 sid 时下发；否则为 null |
+| data.quota.used | integer | 是 | 今天已用 |
+| data.quota.limit | integer | 是 | 固定 3 |
+| data.quota.reset_at | string | 是 | 形如 2026-09-28T00:00:00+08:00 |
+| data.order | object? | 是 | 订单不存在时为 null |
+| data.order.order_no | string | 是 | |
+| data.order.status | string | 是 | paid / shipped / done |
+| data.order.amount | number | 是 | 金额，两位小数 |
+| data.order.created_at | string | 是 | |
+| data.order.items | array? | 是 | with_items 为 false 时为 null |
+| data.order.items.sku | string | 是 | |
+| data.order.items.qty | integer | 是 | |
+| data.order.items.price | number? | 否 | 未定价时 null |
 
 ### 业务错误码
 | code | 场景 | data |
 |---|---|---|
-| 400 | kind 或 id 非法 | [] |
-| 429 | 当日次数用完 | 只有 quota |
+| 400 | order_no 为空或格式不对 | [] |
+| 404 | 订单不存在 | [] |
+| 429 | 当日 3 次用完 | 只有 quota |
 
 ### 用例
 | 用例 | 参数 | 期望 code | 期望 |
 |---|---|---|---|
-| 正常查询 | kind=product, id=1730826344204964304 | 200 | 返回结构符合上表，report 非 null |
-| id 非法 | kind=product, id=abc | 400 | |
-| 次数用完 | 同一 fp_visid 第 4 次调用 | 429 | data 只有 quota |
+| 正常查询 | order_no=DEMO202609280001 | 200 | order 非 null，items 为 null |
+| 带明细 | order_no=DEMO202609280001, with_items=true | 200 | items 非空，每项有 sku 和 qty |
+| 参数非法 | order_no=abc | 400 | |
+| 订单不存在 | order_no=DEMO000000000000 | 404 | |
+| 次数用完 | 固定 Cookie visitor_id=yapi-quota-001，order_no=DEMO202609280001 连打 4 次 | 429 | 第 4 次 data 只有 quota，used 为 3 |

@@ -190,7 +190,7 @@ artifacts:
     instruction: |
       先读 .claude/skills/yapi/SKILL.md，按它的硬约束写；照 .claude/skills/yapi/references/example-api.md 的格式逐字写，表头、类型词、是/否 都不要发挥。
       - 只写本次新增或修改的 HTTP 接口，一个接口一段，标题行 `## METHOD /path 标题`。
-      - 「模块：」填 openspec/specs/ 下的能力目录名（英文小写连字符，如 snapshot-report），和 proposal 的 Capabilities 一致。
+      - 「模块：」填 openspec/specs/ 下的能力目录名（英文小写连字符，如 order-detail），和 proposal 的 Capabilities 一致。
       - 五张表：请求头、请求参数、返回字段、业务错误码、用例。用例至少 1 条期望 200 的正例、错误码表每个 code 各 1 条反例。
       - 示例值必须是 test 环境真实存在的（见仓库 .claude/skills/yapi-<项目>/references/test-data.md，没有就问用户），取不到就问用户一次，不猜。
       - 返回字段用点路径，data 下每个字段一行，「必有」列填对；可空的类型加 `?`。「必有」会变成 YApi JSON Schema 的 required。

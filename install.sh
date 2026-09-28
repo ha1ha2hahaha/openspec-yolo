@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# openspec-yolo 一键安装。在业务仓库根目录跑：
+# openspec-yolo 一键安装（只装 skill，不碰 yapi CLI 和登录）。在业务仓库根目录跑：
 #   curl -fsSL https://raw.githubusercontent.com/ha1ha2hahaha/openspec-yolo/main/install.sh | bash
 # 幂等：重复跑等于更新；不会覆盖你已经填过的 references/project.md。
 set -euo pipefail
@@ -46,31 +46,10 @@ cp "$SRC/skills/yapi/references/example-api.md" .claude/skills/yapi/references/e
 [ -f .claude/skills/yapi/references/project.md ] || cp "$SRC/skills/yapi/references/project.md" .claude/skills/yapi/references/project.md   # 待填项由 AI 第一次用时自己补
 ok "skill 包已拷入 .claude/（opsx 命令、openspec-* 六个 skill、yapi skill）"
 
-# 4. yapi CLI
-need yapi || npm i -g @leeguoo/yapi-mcp
-ok "yapi CLI $(yapi --version 2>/dev/null | head -1)"
-
-# 5. 接进 OpenSpec（复制产物清单到用户级目录、config.yaml 切 api-contract、.gitignore 加 .yapi/）
+# 4. 接进 OpenSpec（复制产物清单到用户级目录、config.yaml 切 api-contract、.gitignore 加 .yapi/）
 node .claude/skills/yapi/scripts/yapi.mjs init >/dev/null
 openspec schemas --json 2>/dev/null | grep -q '"api-contract"' && ok "OpenSpec 已认到 api-contract 产物清单" || die "openspec schemas 里没有 api-contract，把上面的输出发给维护者"
 
-# 6. YApi 登录（一台电脑一次）。有终端就当场问；curl | bash 没有终端，就打印两条命令
-if yapi whoami --no-update 2>/dev/null | grep -q '"errcode": 0'; then
-  ok "yapi CLI 已登录"
-elif (: </dev/tty) 2>/dev/null; then   # 有可读的终端才当场问；curl | bash 且没终端时走下面的提示
-  echo
-  echo "登录 YApi（密码只用来换 cookie，不落盘；7 天后重跑 yapi login）"
-  read -r -p "  YApi 地址（如 http://yapi.example.com）: " YAPI_URL </dev/tty
-  read -r -p "  邮箱: " YAPI_EMAIL </dev/tty
-  read -r -s -p "  密码: " YAPI_PASS </dev/tty; echo
-  yapi config init --base-url="$YAPI_URL" --auth-mode=global --email="$YAPI_EMAIL" >/dev/null
-  yapi login --base-url="$YAPI_URL" --email="$YAPI_EMAIL" --password="$YAPI_PASS" >/dev/null && ok "yapi CLI 已登录" || die "登录失败，检查地址、邮箱、密码"
-  unset YAPI_PASS
-else
-  todo "登录 YApi 一次：yapi config init --base-url=<YApi 地址> --auth-mode=global --email=<邮箱> && yapi login --base-url=<YApi 地址> --email=<邮箱> --password=<密码>"
-fi
-
 echo
-echo "装好了。项目事实（返回格式、成功码、test 域名、YApi 项目 id、测试数据）由 AI 第一次跑 /opsx:propose 时自己读代码补齐，读不到的它会问你一次。"
+echo "skill 装好了。yapi CLI 的安装、登录和 YApi 环境配置见团队文档。"
 todo "把 .claude/ openspec/ CLAUDE.md 提交进 git"
-todo "test 环境要 cookie 才能过的话（风控、登录态），在 Chrome 里对 test 域名设一次，见 README"

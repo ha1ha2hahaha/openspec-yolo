@@ -16,13 +16,15 @@ AI Native 协作流程的 skill 包，装进任何一个后端仓库就能用：
 ├── commands/opsx/     /opsx:explore | propose | apply | archive | sync | update
 └── skills/
     ├── openspec-*/    OpenSpec 原装 skill（propose / apply-change / archive-change 开头加了一行「先读 yapi/SKILL.md」）
-    └── yapi/
-        ├── SKILL.md              规则：api.md 怎么写、五步里各做什么、红了怎么判
-        ├── scripts/yapi.mjs      init | push <变更名> | archive <变更名>
-        ├── openspec-schema/      OpenSpec 产物清单（比默认多一个 api）+ 模板
-        └── references/
-            ├── example-api.md    脚本校验通过的 api.md 范例（虚构业务）
-            └── project.md        项目事实，AI 第一次用时自己补，人不用填
+    ├── yapi/
+    │   ├── SKILL.md              规则：api.md 怎么写、五步里各做什么、红了怎么判
+    │   ├── scripts/yapi.mjs      init | push <变更名> | archive <变更名>
+    │   ├── openspec-schema/      OpenSpec 产物清单（比默认多一个 api）+ 模板
+    │   └── references/
+    │       ├── example-api.md    脚本校验通过的 api.md 范例（虚构业务）
+    │       └── project.md        项目事实，AI 第一次用时自己补，人不用填
+    └── commit-as-prompt/
+        └── SKILL.md              /commit-as-prompt：提交前自动归档做完的 change，commit 写成 Why / What / How
 ```
 
 ## 安装
@@ -33,9 +35,23 @@ AI Native 协作流程的 skill 包，装进任何一个后端仓库就能用：
 bash <(curl -fsSL https://raw.githubusercontent.com/ha1ha2hahaha/openspec-yolo/main/install.sh)
 ```
 
-它只装 skill：没装 OpenSpec 就装、没有 `openspec/` 就 `openspec init`、把 `commands/opsx`、`skills/openspec-*`、`skills/yapi` 拷进 `.claude/`、把 api 产物接进 OpenSpec、自检。重复跑等于更新，不覆盖已有的 `references/project.md`。
+它只装 skill：没装 OpenSpec 就装、没有 `openspec/` 就 `openspec init`、把 `commands/opsx`、`skills/openspec-*`、`skills/yapi`、`skills/commit-as-prompt` 拷进 `.claude/`、把 api 产物接进 OpenSpec、自检。重复跑等于更新，不覆盖已有的 `references/project.md`。
 
 装完把 `.claude/`、`openspec/`、`CLAUDE.md` 提交进 git。
+
+装了这些（都在仓库的 `.claude/` 下，提交进 git 后全组共用）：
+
+| 装的东西 | 怎么用 | 做什么 |
+|---|---|---|
+| `commands/opsx/` | `/opsx:explore` `propose` `apply` `archive` `sync` `update` | 开发流程的六个命令入口，每个命令背后调对应的 skill |
+| `skills/openspec-explore` | `/opsx:explore` | 动手前一起想：读代码、理需求、比方案，不写代码 |
+| `skills/openspec-propose` | `/opsx:propose` | 一步生成 proposal / design / api.md / tasks / spec |
+| `skills/openspec-update-change` | `/opsx:update` | 改方案：把新决定合进已有产物并保持前后一致，不改代码 |
+| `skills/openspec-apply-change` | `/opsx:apply` | 照 tasks 写代码、自测，做完推 YApi |
+| `skills/openspec-sync-specs` | `/opsx:sync` | 不归档，只把变更里的 spec 同步进主 spec |
+| `skills/openspec-archive-change` | `/opsx:archive` | 收尾：变更移进 archive、spec 合进主 spec、YApi 状态改 done |
+| `skills/yapi` | 不单独调，上面几个命令自动先读 | api.md 怎么写、什么时候推 YApi、测试红了怎么判 |
+| `skills/commit-as-prompt` | `/commit-as-prompt` | 提交：有做完的 change 先自动归档，再把 commit 写成 Why / What / How |
 
 不在脚本里做的：yapi CLI 的安装和登录、YApi 环境配置、test 环境的 cookie。这些按团队文档来。
 

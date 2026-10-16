@@ -34,7 +34,7 @@ else
 fi
 [ -f "$SRC/skills/yapi/SKILL.md" ] || die "skill 包不完整：$SRC"
 
-# 3. 拷进 .claude/（只动 commands/opsx、skills/openspec-*、skills/yapi）
+# 3. 拷进 .claude/（只动 commands/opsx、skills/openspec-*、skills/yapi、skills/commit-as-prompt）
 mkdir -p .claude/commands .claude/skills .claude/skills/yapi/references
 rm -rf .claude/commands/opsx && cp -R "$SRC/commands/opsx" .claude/commands/opsx
 for d in "$SRC"/skills/openspec-*; do n=$(basename "$d"); rm -rf ".claude/skills/$n"; cp -R "$d" ".claude/skills/$n"; done
@@ -44,7 +44,8 @@ cp -R "$SRC/skills/yapi/scripts"         .claude/skills/yapi/scripts
 cp -R "$SRC/skills/yapi/openspec-schema" .claude/skills/yapi/openspec-schema
 cp "$SRC/skills/yapi/references/example-api.md" .claude/skills/yapi/references/example-api.md
 [ -f .claude/skills/yapi/references/project.md ] || cp "$SRC/skills/yapi/references/project.md" .claude/skills/yapi/references/project.md   # 待填项由 AI 第一次用时自己补
-ok "skill 包已拷入 .claude/（opsx 命令、openspec-* 六个 skill、yapi skill）"
+rm -rf .claude/skills/commit-as-prompt && cp -R "$SRC/skills/commit-as-prompt" .claude/skills/commit-as-prompt
+ok "skill 包已拷入 .claude/（opsx 命令、openspec-* 六个 skill、yapi skill、commit-as-prompt skill）"
 
 # 4. 接进 OpenSpec（复制产物清单到用户级目录、config.yaml 切 api-contract、.gitignore 加 .yapi/）
 node .claude/skills/yapi/scripts/yapi.mjs init >/dev/null

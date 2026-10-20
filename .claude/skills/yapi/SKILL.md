@@ -1,6 +1,6 @@
 ---
 name: yapi
-description: OpenSpec 变更里的接口契约 api.md 怎么写（接口 + 用例，人读的表格）、什么时候推到 YApi、人跑测试红了怎么判。和 openspec-* 四个 skill 一起搬到别的仓库照用；跑 /opsx:propose、/opsx:apply、/opsx:archive 之前先读；用户说「推一下 YApi」「更新接口文档」「接口测试红了」时也用。
+description: 把 YApi 接口文档和自动化测试接进 OpenSpec 流程：propose 时生成接口契约和测试用例（api.md），apply 完推到 YApi 建接口和测试集合，archive 前确认测试全部通过。跑 /opsx:propose、/opsx:apply、/opsx:archive 前先读；用户说「推一下 YApi」「更新接口文档」「接口测试红了」时也用。
 ---
 
 # yapi

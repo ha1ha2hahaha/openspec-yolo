@@ -6,8 +6,11 @@
 //   node .claude/skills/yapi/scripts/yapi.mjs push <变更名> [--project <id>] [--dry-run]     解析 → 校验 → 推接口定义（undone）→ 推测试集合和用例
 //   node .claude/skills/yapi/scripts/yapi.mjs archive <变更名> [--project <id>] [--dry-run]  合进 openspec/specs/<模块>/api.md，YApi 接口状态改 done
 //                                                                     （归档前后都行：会去 openspec/changes/archive/*-<变更名>/ 找）
+//   node .claude/skills/yapi/scripts/yapi.mjs pull [--base-url <地址>] [--token <项目token>] [--module <分类>] [--tag <变更>] [--status done|undone] [--out <目录>] [--dry-run]
+//                                                                    前端（消费方）用项目 token 把 YApi 接口拉成 api.md + api.json 快照，不需要 yapi CLI / 登录
 //
 // --project 不给时从本 skill 的 references/project.md 里「YApi 项目 id」那行读。
+// pull 的 --base-url / --token 不给时读 ~/.yapi/config.toml；token 缺失就停下来问用户要，不猜、不落盘。
 // 规则见 .claude/skills/yapi/SKILL.md。人不读这个脚本，靠结果验：报错都是人话并带 文件:行号。
 
 import fs from 'node:fs';
@@ -497,11 +500,162 @@ async function init({ root }) {
   console.log('\n验证：openspec schemas 应列出 api-contract（source user）；openspec status --change <变更> 应有 api 一项。');
 }
 
-// ---------------- 9. 入口 ----------------
+// ---------------- 9. pull：前端（消费方）用项目 token 拉接口 ----------------
+const PULL_HELP = `拉接口需要 YApi 地址和项目 Token。请先问用户要，不要自己猜、不要翻浏览器 cookie：\n  1）YApi 地址：项目页的域名，如 http://yapi.yolobuyer.com\n  2）项目 Token：YApi 项目页 → 设置 → Token（一长串字母数字）\n拿到后重跑：node .claude/skills/yapi/scripts/yapi.mjs pull --base-url <地址> --token <token>\nToken 是项目凭证（能读也能写），只在命令里用，不写进任何文件；用户没给就问一次。`;
+
+const STATUS_TEXT = { done: '已完成（done）', undone: '开发中（undone）' };
+const statusText = s => STATUS_TEXT[s] || (s ? String(s) : '未知');
+const flagText = v => String(v) === '1' ? '是' : '否';
+const argOf = (rest, name) => { const i = rest.indexOf(name); return i >= 0 ? (rest[i + 1] || '') : ''; };
+
+function readYapiConfig() {
+  try {
+    const text = fs.readFileSync(path.join(process.env.HOME || '', '.yapi', 'config.toml'), 'utf8');
+    const pick = k => (text.match(new RegExp('^' + k + '\\s*=\\s*"([^"]*)"', 'm')) || [])[1] || '';
+    return { base_url: pick('base_url'), token: pick('token') };
+  } catch { return { base_url: '', token: '' }; }
+}
+
+const mdCell = v => String(v ?? '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim();
+const mdTable = (head, rows) => rows.length
+  ? [`| ${head.join(' | ')} |`, `|${head.map(() => '---').join('|')}|`, ...rows.map(r => `| ${r.map(mdCell).join(' | ')} |`)].join('\n')
+  : '（无）';
+function pretty(s) {
+  const t = typeof s === 'string' ? s.trim() : '';
+  if (!t) return '';
+  try { return JSON.stringify(JSON.parse(t), null, 2); } catch { return t; }
+}
+const fence = (lang, text) => text ? '```' + lang + '\n' + text + '\n```' : '';
+
+function renderInterface(api) {
+  const out = [];
+  out.push(`### ${api.method} ${api.path} ${api.title || ''}`.trim(), '');
+  const meta = [`状态：${statusText(api.status)}`, `接口 id：${api._id}`];
+  if (Array.isArray(api.tag) && api.tag.length) meta.push(`变更：${api.tag.join('、')}`);
+  out.push(meta.join('　'), '');
+
+  out.push('#### 请求头', '', mdTable(['参数', '必填', '示例', '说明'],
+    (api.req_headers || []).map(h => [h.name, flagText(h.required), h.value || '', h.desc || ''])), '');
+  out.push('#### 请求参数（query）', '', mdTable(['参数', '类型', '必填', '示例', '说明'],
+    (api.req_query || []).map(q => [q.name, q.type || 'string', flagText(q.required), q.example ?? q.value ?? '', q.desc || ''])), '');
+
+  if (api.req_body_type === 'form' && (api.req_body_form || []).length) {
+    out.push('#### 请求体（form）', '', mdTable(['参数', '类型', '必填', '示例', '说明'],
+      api.req_body_form.map(f => [f.name, f.type || 'string', flagText(f.required), f.value || '', f.desc || ''])), '');
+  } else if (api.req_body_other) {
+    const label = api.req_body_is_json_schema
+      ? '请求体（JSON Schema）'
+      : `请求体示例（${api.req_body_type || 'json'}；不是 schema，字段类型以接口说明为准）`;
+    out.push('#### ' + label, '', fence(api.req_body_type === 'json' ? 'json' : '', pretty(api.req_body_other)), '');
+  }
+
+  if (api.res_body) {
+    out.push(`#### 返回（${api.res_body_is_json_schema ? 'JSON Schema' : '示例'}）`, '',
+      fence(api.res_body_type === 'json' ? 'json' : '', pretty(api.res_body)), '');
+  }
+  if (api.desc) out.push('#### 接口说明', '', String(api.desc).trim(), '');
+  return out.join('\n');
+}
+
+function renderPullMarkdown({ project, baseUrl, pulledAt, categories, filters, counts }) {
+  const lines = [];
+  lines.push(`# YApi 接口快照：${project.name || '未知项目'}（${project.id || '?'}）`, '');
+  const meta = [`拉取时间：${pulledAt}`, `YApi：${baseUrl}`, `接口数：${counts.apis}（分类 ${counts.cats}）`];
+  if (filters.length) meta.push(`筛选：${filters.join('，')}`);
+  lines.push(meta.join('　'), '');
+  lines.push('> 这是 YApi 的只读快照，由 `.claude/skills/yapi/scripts/yapi.mjs pull` 生成。接口契约以后端仓库的 `api.md` 为准；发现不对找后端改，不要手改 YApi。', '');
+  lines.push('## 接口清单', '', mdTable(['分类', '方法', '路径', '标题', '状态'],
+    categories.flatMap(c => (c.list || []).map(a => [c.name, a.method, a.path, a.title || '', statusText(a.status)]))), '');
+  for (const c of categories) {
+    lines.push(`## 分类 ${c.name}`, '');
+    if (c.desc) lines.push(`> ${String(c.desc).replace(/\s*\n\s*/g, ' ').trim()}`, '');
+    for (const api of (c.list || [])) lines.push(renderInterface(api), '');
+  }
+  return lines.join('\n');
+}
+
+async function getJson(baseUrl, pathname) {
+  let res;
+  try { res = await fetch(baseUrl.replace(/\/$/, '') + pathname, { signal: AbortSignal.timeout(30000) }); }
+  catch (e) {
+    const why = (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) ? '请求超时' : '网络错误';
+    fail(`连不上 YApi（${baseUrl}）：${why}。检查地址和网络后重试。`);
+  }
+  const text = await res.text();
+  try { return JSON.parse(text); } catch {
+    fail(`YApi 返回的不是 JSON（HTTP ${res.status}）。确认 --base-url 是 YApi 站点地址（如 http://yapi.yolobuyer.com），不要带页面路径。`);
+  }
+}
+
+const BAD_TOKEN = 'token 无效或已重置。请让用户重新给项目 token（YApi 项目页 → 设置 → Token），不要自己猜。';
+
+async function pull({ root, rest }) {
+  if (typeof fetch !== 'function') fail('这个命令需要 Node 18+（用到内置 fetch）。请升级 Node 后重试。');
+  const cfg = readYapiConfig();
+  const baseUrl = (argOf(rest, '--base-url') || cfg.base_url || '').trim().replace(/\/$/, '');
+  let token = (argOf(rest, '--token') || cfg.token || '').trim().replace(/^\d+:/, '');   // 兼容 yapi CLI 的 projectId:token 写法
+  if (!baseUrl || !/^https?:\/\//.test(baseUrl) || !token) fail(PULL_HELP);
+
+  const tokenQ = encodeURIComponent(token);
+  const projRes = await getJson(baseUrl, '/api/project/get?token=' + tokenQ);
+  if (projRes && (projRes.errcode === 42014 || projRes.errcode === 40011)) fail(BAD_TOKEN);
+  if (projRes && projRes.errcode) fail(`YApi 返回错误 ${projRes.errcode} ${projRes.errmsg || ''}`);
+  const project = (projRes && projRes.data) || {};
+
+  const exported = await getJson(baseUrl, '/api/plugin/export?type=json&token=' + tokenQ);
+  if (!Array.isArray(exported)) {
+    if (exported && (exported.errcode === 42014 || exported.errcode === 40011)) fail(BAD_TOKEN);
+    if (exported && exported.errcode) fail(`YApi 返回错误 ${exported.errcode} ${exported.errmsg || ''}`);
+    fail('YApi 导出结果不是分类数组。确认用户给的是 YApi 项目 Token，不是个人 token 或别的项目。');
+  }
+
+  const moduleName = argOf(rest, '--module');
+  const tag = argOf(rest, '--tag');
+  const status = argOf(rest, '--status');
+  const filters = [];
+  if (moduleName) filters.push(`module=${moduleName}`);
+  if (tag) filters.push(`tag=${tag}`);
+  if (status) filters.push(`status=${status}`);
+  let categories = exported
+    .filter(c => !moduleName || c.name === moduleName)
+    .map(c => ({ ...c, list: (c.list || []).filter(a => (!tag || (a.tag || []).includes(tag)) && (!status || a.status === status)) }))
+    .filter(c => (c.list || []).length > 0);
+  const counts = { apis: categories.reduce((s, c) => s + c.list.length, 0), cats: categories.length };
+  if (!counts.apis) fail(`筛选后没有接口（${filters.join('，') || '无筛选'}）。检查 --module / --tag / --status 的写法；去掉筛选重跑可以看全部。`);
+
+  const projectRef = { id: project._id, name: project.name };
+  const pulledAt = new Date().toLocaleString('zh-CN', { hour12: false });
+  if (rest.includes('--dry-run')) {
+    console.log(`[dry-run] ${projectRef.name || '?'}（${projectRef.id || '?'}）：${counts.cats} 个分类、${counts.apis} 个接口，未写文件。`);
+    return;
+  }
+
+  const outDir = path.resolve(root, argOf(rest, '--out') || path.join('.yapi', 'pull'));
+  fs.mkdirSync(outDir, { recursive: true });
+  const mdFile = path.join(outDir, 'api.md');
+  const jsonFile = path.join(outDir, 'api.json');
+  fs.writeFileSync(mdFile, renderPullMarkdown({ project: projectRef, baseUrl, pulledAt, categories, filters, counts }));
+  fs.writeFileSync(jsonFile, JSON.stringify({ project: projectRef, base_url: baseUrl, pulled_at: pulledAt, categories }, null, 2));
+  const gi = path.join(root, '.gitignore');
+  if (fs.existsSync(path.join(root, '.git'))) {
+    const giText = fs.existsSync(gi) ? fs.readFileSync(gi, 'utf8') : '';
+    if (!/^\.yapi\/?$/m.test(giText)) {
+      fs.writeFileSync(gi, giText.replace(/\s*$/, '\n') + '\n# yapi skill pull 的接口快照\n.yapi/\n');
+      console.log('.gitignore：加了 .yapi/（快照不进 git）');
+    }
+  }
+  console.log(`${projectRef.name || '?'}（${projectRef.id || '?'}）：${counts.cats} 个分类、${counts.apis} 个接口`);
+  console.log(`  ${path.relative(root, mdFile)}  ← 给人和 AI 读`);
+  console.log(`  ${path.relative(root, jsonFile)}  ← 原始导出`);
+  console.log('接口状态：undone = 后端已写完、还没归档；done = 已归档。契约以后端 api.md 为准。');
+}
+
+// ---------------- 10. 入口 ----------------
 async function main(argv) {
   const [cmd, changeName, ...rest] = argv;
+  if (cmd === 'pull') return pull({ root: process.cwd(), rest: argv.slice(1) });
   const cmds = { init, push, archive };
-  if (!cmds[cmd]) fail('用法：node .claude/skills/yapi/scripts/yapi.mjs init | push <变更名> [--project <id>] [--dry-run] | archive <变更名> [--project <id>] [--dry-run]');
+  if (!cmds[cmd]) fail('用法：node .claude/skills/yapi/scripts/yapi.mjs init | push <变更名> [--project <id>] [--dry-run] | archive <变更名> [--project <id>] [--dry-run] | pull [--base-url <地址>] [--token <token>] [--module <分类>] [--tag <变更>] [--status done|undone] [--out <目录>] [--dry-run]');
   await cmds[cmd]({ root: findRoot(process.cwd()), changeName, dry: rest.includes('--dry-run'), rest });
 }
 

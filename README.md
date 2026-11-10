@@ -1,11 +1,12 @@
 # openspec-yolo
 
-AI Native 协作流程的 skill 包，装进任何一个后端仓库就能用：
+AI Native 协作流程的 skill 包，装进后端仓库就能用；前端仓库只装 `skills/yapi` 也能用它把接口拉下来：
 
 - OpenSpec 五步流程：explore → propose → apply → commit → archive
 - propose 时多生成一份人读的接口契约 `api.md`（接口 + 用例，五张表）
 - apply 做完，脚本把接口定义和测试用例推到 YApi，人在 YApi 点「开始测试」
 - archive 时 `api.md` 合进主 spec，YApi 接口状态改 done
+- 前端 agent 问人要 YApi 地址 + 项目 Token，跑 `pull` 把接口拉成 `api.md` + `api.json` 快照（不需要 OpenSpec、不需要 yapi CLI）
 
 配套规范（飞书）：AI Coding 落地规范 v2：接口契约接入 YApi。
 
@@ -18,7 +19,7 @@ AI Native 协作流程的 skill 包，装进任何一个后端仓库就能用：
     ├── openspec-*/    OpenSpec 原装 skill（propose / apply-change / archive-change 开头加了一行「先读 yapi/SKILL.md」）
     ├── yapi/
     │   ├── SKILL.md              规则：api.md 怎么写、五步里各做什么、红了怎么判
-    │   ├── scripts/yapi.mjs      init | push <变更名> | archive <变更名>
+    │   ├── scripts/yapi.mjs      init | push <变更名> | archive <变更名> | pull（前端拉接口）
     │   ├── openspec-schema/      OpenSpec 产物清单（比默认多一个 api）+ 模板
     │   └── references/
     │       ├── example-api.md    脚本校验通过的 api.md 范例（虚构业务）
@@ -50,7 +51,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ha1ha2hahaha/openspec-yolo/m
 | `skills/openspec-apply-change` | `/opsx:apply` | 照 tasks 写代码、自测，做完推 YApi |
 | `skills/openspec-sync-specs` | `/opsx:sync` | 不归档，只把变更里的 spec 同步进主 spec |
 | `skills/openspec-archive-change` | `/opsx:archive` | 收尾：变更移进 archive、spec 合进主 spec、YApi 状态改 done |
-| `skills/yapi` | 不单独调，上面几个命令自动先读 | api.md 怎么写、什么时候推 YApi、测试红了怎么判 |
+| `skills/yapi` | 后端：上面几个命令自动先读；前端：`node .claude/skills/yapi/scripts/yapi.mjs pull` | api.md 怎么写、什么时候推 YApi、测试红了怎么判；前端用项目 token 拉接口快照 |
 | `skills/commit-as-prompt` | `/commit-as-prompt` | 提交：有做完的 change 先自动归档，再把 commit 写成 Why / What / How |
 
 不在脚本里做的：yapi CLI 的安装和登录、YApi 环境配置、test 环境的 cookie。这些按团队文档来。
@@ -68,6 +69,16 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ha1ha2hahaha/openspec-yolo/m
 | `/opsx:archive` | AI | 确认验收项已勾；归档后跑 `archive <变更名>`，api.md 合进 `openspec/specs/<模块>/api.md`，YApi 状态改 done |
 
 `push` / `archive` 都支持 `--dry-run`（不需要登录）和 `--project <id>`（推到别的 YApi 项目）。
+
+### 前端仓库怎么用
+
+只把 `.claude/skills/yapi/` 拷过去（不用跑一键安装，不用 OpenSpec、不用 yapi CLI）。让 AI 先问你要 **YApi 地址**和 **项目 Token**（YApi 项目页 → 设置 → Token），然后跑：
+
+```bash
+node .claude/skills/yapi/scripts/yapi.mjs pull --base-url <地址> --token <token>
+```
+
+接口快照写到 `.yapi/pull/api.md` 和 `api.json`，`.yapi/` 自动进 `.gitignore`。支持 `--module` / `--tag` / `--status` / `--out` / `--dry-run`。项目 token 能读也能写（YApi 的 token 白名单包含 interface/save 等写接口），当密码对待：不写进代码和仓库，泄露就重置。
 
 ## 已知的 YApi 限制
 

@@ -35,48 +35,20 @@ openspec/changes/<变更>/
 
 只有 YApi 项目 id 和测试数据是人才知道的，一次问清写进文件；其它的从代码里读。
 
-## 前端（消费方）：用项目 token 把接口拉下来
+## 前端（消费方）：只凭项目 token 把接口拉下来
 
-同一份 skill 也能装在前端仓库。前端仓库只需要 `.claude/skills/yapi/` 这一个目录（整个拷过去就行），**不需要 OpenSpec、不需要 yapi CLI、不需要 yapi login**。前端 agent 的流程：
+前端没有后端代码，不知道变更名、分类名，手里只有一个 **YApi 项目 Token**。入口是 **`/yapi-pull <项目token>`**（`.claude/skills/yapi-pull/`，流程、报错处理、怎么读快照都写在那里），它调本 skill 的脚本：
 
-1. **先问人要地址和 token，不要自己找。** 需要两样：
-   - YApi 地址：项目页的域名，如 `http://yapi.yolobuyer.com`
-   - 项目 Token：YApi 项目页 → 设置 → Token
+```bash
+node .claude/skills/yapi/scripts/yapi.mjs pull <项目token>
+```
 
-   用户没给就问一次。**不猜、不翻浏览器 cookie、不从别的文件里抠**；`~/.yapi/config.toml` 里有就用，没有就停下来问。
+- 前端仓库拷 `.claude/skills/yapi/` 和 `.claude/skills/yapi-pull/` 两个目录即可，**不需要 OpenSpec、yapi CLI、yapi login**。
+- 只问用户要 token。YApi 地址脚本里有默认值（`DEFAULT_YAPI_BASE_URL`），换了 YApi 才用 `--base-url` 覆盖。
+- 默认拉整个项目，写到 `.yapi/pull/api.md`（给人 / AI 读）和 `api.json`（原始导出），`.yapi/` 自动进 `.gitignore`。`--module` / `--tag` / `--status` 是给知道后端分类、变更名的人用的，前端不需要。
+- 拉下来的是只读快照：POST 请求体只有示例不是 schema；`undone` = 后端写完未归档，`done` = 已归档；发现不对找后端改 `api.md` 再 push，前端重拉。
 
-2. **拉接口**：
-
-   ```bash
-   node .claude/skills/yapi/scripts/yapi.mjs pull --base-url <地址> --token <token>
-   ```
-
-   默认写到 `.yapi/pull/api.md`（给人 / AI 读）和 `.yapi/pull/api.json`（原始导出），`.yapi/` 会自动加进 `.gitignore`。常用选项：
-
-   | 选项 | 作用 |
-   |---|---|
-   | `--module <分类>` | 只看一个能力（分类名 = `openspec/specs/` 的目录名） |
-   | `--tag <变更名>` | 只看某次变更推上来的接口 |
-   | `--status done\|undone` | 只看已归档 / 开发中的接口 |
-   | `--out <目录>` | 换个输出目录 |
-   | `--dry-run` | 只打统计，不写文件 |
-
-   `--base-url` / `--token` 不给时读 `~/.yapi/config.toml`；token 支持 `1070:xxxx` 这种 CLI 写法（会剥掉项目 id 前缀）。命令只用 Node 18+ 内置的 `fetch`，不经过 yapi CLI。
-
-3. **读 `.yapi/pull/api.md` 写前端代码。** 每个接口有请求头、query 参数、请求体、返回 JSON Schema、状态和业务错误码；`api.json` 是同一份数据的原始形态，需要精确字段时读它。
-
-几条判断规则：
-
-- 返回字段是 JSON Schema；**POST 请求体只有示例 JSON，不是 schema**，字段类型和必填以接口说明 / 后端 `api.md` 为准。
-- 状态 `undone` = 后端已写完、还没归档，可以先联调；`done` = 已归档。
-- 拉下来的是只读快照。发现不对找后端改 `api.md` 再 push，不要在前端改完当契约；下次 `pull` 会覆盖。
-- 要固定 Cookie 才能测的接口，YApi 自己跑不了（浏览器扩展发不出 `Cookie` 头），前端联调时自己带。
-
-**项目 token 是项目凭证，不是只读 key。** YApi 把 `interface/save`、`interface/add`、`interface/up`、`interface/add_cat`、`project/up`、`open/import_data` 这些写接口也放在 token 白名单里，拿到 token 的人能改接口和分类，操作记录是 `system`，查不到是谁改的。所以：
-
-- 只在命令里用；不写进代码、`.env`、仓库、提交或聊天记录。`pull` 不保存 token。
-- 前端长期用的话，优先让项目管理员把前端加进项目成员、用他自己的账号；token 只给确实要跑 `pull` 的 AI 在本机用。
-- 怀疑泄露就请项目管理员在 YApi 项目设置里重置 token。重置不影响后端的 `push` / `archive`，它们走的是 yapi CLI 登录态。
+**项目 token 是项目凭证，不是只读 key。** YApi 把 `interface/save`、`interface/add`、`interface/up`、`interface/add_cat`、`project/up`、`open/import_data` 这些写接口也放在 token 白名单里，拿到 token 的人能改接口和分类，操作记录是 `system`，查不到是谁改的。所以只在命令里用，不写进代码、`.env`、仓库或提交；`pull` 不保存 token；怀疑泄露就请项目管理员重置（不影响后端的 `push` / `archive`，它们走 yapi CLI 登录态）。
 
 > 下一节「第一次在一个仓库里用：自检」是后端仓库的事。前端仓库只跑 `pull`，不跑 `init`，也不要求有 `openspec/`。
 

@@ -1,12 +1,12 @@
 # openspec-yolo
 
-AI Native 协作流程的 skill 包，装进后端仓库就能用；前端仓库只装 `skills/yapi` 也能用它把接口拉下来：
+AI Native 协作流程的 skill 包，装进后端仓库就能用；前端仓库装 `skills/yapi` + `skills/yapi-pull`，凭一个 YApi 项目 Token 用 `/yapi-pull` 把接口拉下来：
 
 - OpenSpec 五步流程：explore → propose → apply → commit → archive
 - propose 时多生成一份人读的接口契约 `api.md`（接口 + 用例，五张表）
 - apply 做完，脚本把接口定义和测试用例推到 YApi，人在 YApi 点「开始测试」
 - archive 时 `api.md` 合进主 spec，YApi 接口状态改 done
-- 前端 agent 问人要 YApi 地址 + 项目 Token，跑 `pull` 把接口拉成 `api.md` + `api.json` 快照（不需要 OpenSpec、不需要 yapi CLI）
+- 前端敲 `/yapi-pull <项目token>`，把接口拉成 `api.md` + `api.json` 快照（不需要后端代码、OpenSpec、yapi CLI）
 
 配套规范（飞书）：AI Coding 落地规范 v2：接口契约接入 YApi。
 
@@ -17,6 +17,7 @@ AI Native 协作流程的 skill 包，装进后端仓库就能用；前端仓库
 ├── commands/opsx/     /opsx:explore | propose | apply | archive | sync | update
 └── skills/
     ├── openspec-*/    OpenSpec 原装 skill（propose / apply-change / archive-change 开头加了一行「先读 yapi/SKILL.md」）
+    ├── yapi-pull/         /yapi-pull：前端拉接口的入口命令（调 yapi/scripts/yapi.mjs pull）
     ├── yapi/
     │   ├── SKILL.md              规则：api.md 怎么写、五步里各做什么、红了怎么判
     │   ├── scripts/yapi.mjs      init | push <变更名> | archive <变更名> | pull（前端拉接口）
@@ -72,13 +73,15 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ha1ha2hahaha/openspec-yolo/m
 
 ### 前端仓库怎么用
 
-只把 `.claude/skills/yapi/` 拷过去（不用跑一键安装，不用 OpenSpec、不用 yapi CLI）。让 AI 先问你要 **YApi 地址**和 **项目 Token**（YApi 项目页 → 设置 → Token），然后跑：
+前端没有后端代码，只需要 YApi 项目页 → 设置 → Token 里的那串 **项目 Token**。把 `.claude/skills/yapi/` 和 `.claude/skills/yapi-pull/` 两个目录拷进前端仓库（不用跑一键安装，不用 OpenSpec、yapi CLI），然后在 Claude Code 里敲：
 
-```bash
-node .claude/skills/yapi/scripts/yapi.mjs pull --base-url <地址> --token <token>
+```
+/yapi-pull <项目token>
 ```
 
-接口快照写到 `.yapi/pull/api.md` 和 `api.json`，`.yapi/` 自动进 `.gitignore`。支持 `--module` / `--tag` / `--status` / `--out` / `--dry-run`。项目 token 能读也能写（YApi 的 token 白名单包含 interface/save 等写接口），当密码对待：不写进代码和仓库，泄露就重置。
+AI 拉下整个项目的接口（`.yapi/pull/api.md` + `api.json`，自动进 `.gitignore`），列出清单，前端说要做哪个页面，AI 从清单里找到对应接口再写代码。没带 token 时 AI 会问你要。YApi 地址内置在脚本里，换了 YApi 才需要 `--base-url`。
+
+项目 token 能读也能写（YApi 的 token 白名单包含 interface/save 等写接口），当密码对待：不写进代码和仓库，泄露就重置。
 
 ## 已知的 YApi 限制
 

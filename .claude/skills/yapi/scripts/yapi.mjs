@@ -6,11 +6,12 @@
 //   node .claude/skills/yapi/scripts/yapi.mjs push <变更名> [--project <id>] [--dry-run]     解析 → 校验 → 推接口定义（undone）→ 推测试集合和用例
 //   node .claude/skills/yapi/scripts/yapi.mjs archive <变更名> [--project <id>] [--dry-run]  合进 openspec/specs/<模块>/api.md，YApi 接口状态改 done
 //                                                                     （归档前后都行：会去 openspec/changes/archive/*-<变更名>/ 找）
-//   node .claude/skills/yapi/scripts/yapi.mjs pull [--base-url <地址>] [--token <项目token>] [--module <分类>] [--tag <变更>] [--status done|undone] [--out <目录>] [--dry-run]
-//                                                                    前端（消费方）用项目 token 把 YApi 接口拉成 api.md + api.json 快照，不需要 yapi CLI / 登录
+//   node .claude/skills/yapi/scripts/yapi.mjs pull <项目token> [--base-url <地址>] [--module <分类>] [--tag <变更>] [--status done|undone] [--out <目录>] [--dry-run]
+//                                                                    前端（消费方）只凭项目 token 把 YApi 接口拉成 api.md + api.json 快照，不需要后端代码、yapi CLI、登录
 //
 // --project 不给时从本 skill 的 references/project.md 里「YApi 项目 id」那行读。
-// pull 的 --base-url / --token 不给时读 ~/.yapi/config.toml；token 缺失就停下来问用户要，不猜、不落盘。
+// pull 的地址依次取 --base-url、~/.yapi/config.toml、DEFAULT_YAPI_BASE_URL；token 依次取位置参数、--token、~/.yapi/config.toml，
+// 都没有就停下来问用户要，不猜、不落盘。
 // 规则见 .claude/skills/yapi/SKILL.md。人不读这个脚本，靠结果验：报错都是人话并带 文件:行号。
 
 import fs from 'node:fs';
@@ -501,7 +502,9 @@ async function init({ root }) {
 }
 
 // ---------------- 9. pull：前端（消费方）用项目 token 拉接口 ----------------
-const PULL_HELP = `拉接口需要 YApi 地址和项目 Token。请先问用户要，不要自己猜、不要翻浏览器 cookie：\n  1）YApi 地址：项目页的域名，如 http://yapi.yolobuyer.com\n  2）项目 Token：YApi 项目页 → 设置 → Token（一长串字母数字）\n拿到后重跑：node .claude/skills/yapi/scripts/yapi.mjs pull --base-url <地址> --token <token>\nToken 是项目凭证（能读也能写），只在命令里用，不写进任何文件；用户没给就问一次。`;
+// 公司 YApi 地址：前端只拿得到项目 token，地址不让人填；换了 YApi 用 --base-url 覆盖
+const DEFAULT_YAPI_BASE_URL = 'http://yapi.yolobuyer.com';
+const PULL_HELP = `拉接口需要 YApi 项目 Token。请问用户要，不要自己猜、不要翻浏览器 cookie、不要从文件里找：\n  「请把 YApi 项目的 Token 发我：YApi 项目页 → 设置 → Token，复制那一长串」\n拿到后重跑：node .claude/skills/yapi/scripts/yapi.mjs pull <token>\nToken 是项目凭证（能读也能写），只在命令里用，不写进任何文件。`;
 
 const STATUS_TEXT = { done: '已完成（done）', undone: '开发中（undone）' };
 const statusText = s => STATUS_TEXT[s] || (s ? String(s) : '未知');
@@ -596,10 +599,23 @@ const BAD_TOKEN = 'token 无效或已重置。请让用户重新给项目 token�
 
 async function pull({ root, rest }) {
   if (typeof fetch !== 'function') fail('这个命令需要 Node 18+（用到内置 fetch）。请升级 Node 后重试。');
+  // 不认识的参数直接报错：拼错（如 --tags）时静默忽略会把整个项目拉下来，看起来像筛选失效
+  const VALUED = new Set(['--base-url', '--token', '--module', '--tag', '--status', '--out']);
+  let posToken = '';
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (VALUED.has(a)) { if (!rest[i + 1] || rest[i + 1].startsWith('--')) fail(`${a} 后面要跟一个值`); i++; continue; }
+    if (a === '--dry-run') continue;
+    if (!a.startsWith('-') && !posToken && !/\s/.test(a)) { posToken = a; continue; }   // pull <token>
+    fail(`不认识的参数「${a}」。用法：pull <项目token> [--module 分类] [--tag 变更] [--status done|undone] [--out 目录] [--base-url 地址] [--dry-run]`);
+  }
+  const st = argOf(rest, '--status');
+  if (st && !['done', 'undone'].includes(st)) fail(`--status 只能是 done 或 undone，实际是「${st}」`);
   const cfg = readYapiConfig();
-  const baseUrl = (argOf(rest, '--base-url') || cfg.base_url || '').trim().replace(/\/$/, '');
-  let token = (argOf(rest, '--token') || cfg.token || '').trim().replace(/^\d+:/, '');   // 兼容 yapi CLI 的 projectId:token 写法
-  if (!baseUrl || !/^https?:\/\//.test(baseUrl) || !token) fail(PULL_HELP);
+  const baseUrl = (argOf(rest, '--base-url') || cfg.base_url || DEFAULT_YAPI_BASE_URL).trim().replace(/\/$/, '');
+  let token = (posToken || argOf(rest, '--token') || cfg.token || '').trim().replace(/^\d+:/, '');   // 兼容 yapi CLI 的 projectId:token 写法
+  if (!token) fail(PULL_HELP);
+  if (!/^https?:\/\//.test(baseUrl)) fail(`YApi 地址「${baseUrl}」不对，要以 http:// 或 https:// 开头。`);
 
   const tokenQ = encodeURIComponent(token);
   const projRes = await getJson(baseUrl, '/api/project/get?token=' + tokenQ);
@@ -660,7 +676,7 @@ async function main(argv) {
   const [cmd, changeName, ...rest] = argv;
   if (cmd === 'pull') return pull({ root: process.cwd(), rest: argv.slice(1) });
   const cmds = { init, push, archive };
-  if (!cmds[cmd]) fail('用法：node .claude/skills/yapi/scripts/yapi.mjs init | push <变更名> [--project <id>] [--dry-run] | archive <变更名> [--project <id>] [--dry-run] | pull [--base-url <地址>] [--token <token>] [--module <分类>] [--tag <变更>] [--status done|undone] [--out <目录>] [--dry-run]');
+  if (!cmds[cmd]) fail('用法：node .claude/skills/yapi/scripts/yapi.mjs init | push <变更名> [--project <id>] [--dry-run] | archive <变更名> [--project <id>] [--dry-run] | pull <项目token> [--module <分类>] [--tag <变更>] [--status done|undone] [--out <目录>] [--dry-run]');
   await cmds[cmd]({ root: findRoot(process.cwd()), changeName, dry: rest.includes('--dry-run'), rest });
 }
 

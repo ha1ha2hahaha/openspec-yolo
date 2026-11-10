@@ -575,11 +575,16 @@ function renderPullMarkdown({ project, baseUrl, pulledAt, categories, filters, c
 }
 
 async function getJson(baseUrl, pathname) {
-  let res;
-  try { res = await fetch(baseUrl.replace(/\/$/, '') + pathname, { signal: AbortSignal.timeout(30000) }); }
-  catch (e) {
-    const why = (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) ? '请求超时' : '网络错误';
-    fail(`连不上 YApi（${baseUrl}）：${why}。检查地址和网络后重试。`);
+  // 内网 YApi 偶发连接被重置：网络层失败自动重试 3 次，HTTP 有响应就不重试
+  let res, lastErr;
+  for (let attempt = 1; attempt <= 3 && !res; attempt++) {
+    try { res = await fetch(baseUrl.replace(/\/$/, '') + pathname, { signal: AbortSignal.timeout(30000) }); }
+    catch (e) { lastErr = e; if (attempt < 3) await new Promise(r => setTimeout(r, 800 * attempt)); }
+  }
+  if (!res) {
+    const e = lastErr || {};
+    const why = (e.name === 'TimeoutError' || e.name === 'AbortError') ? '请求超时' : `网络错误 ${(e.cause && (e.cause.code || e.cause.message)) || e.message || ''}`.trim();
+    fail(`连不上 YApi（${baseUrl}），重试 3 次仍失败：${why}。检查地址和网络（是否连着公司网络 / VPN）后重试。`);
   }
   const text = await res.text();
   try { return JSON.parse(text); } catch {
